@@ -1,4 +1,5 @@
 library(rjson)
+library(tidyverse)
 
 trial_key <- "57yjy9e3bg2psxjqhs7qznef"
 
@@ -22,7 +23,7 @@ jsonedit(league)
 # Conferences: Pac-12: 1; Big 12: 4; ACC: 17; SEC: 23; Big 10: 25; WCC 30; Big East: 31;
 team_info <- data.frame()
 conf_id <- c(1, 4, 17, 23, 25, 30, 31)
-for(i in 1:length(conferences)){
+for(i in 1:length(conf_id)){
     conf <- league$divisions[[8]]$conferences[[conf_id[i]]]
     conf_name <- conf$name
     conf_alias <- conf$alias
@@ -35,3 +36,16 @@ for(i in 1:length(conferences)){
         team_info <- team_info %>% bind_rows(info)
     }
 }
+
+head(team_info)
+tail(team_info)
+library(xml2)
+library(rvest)
+library(rjson)
+coaches <- "https://www.coachesdatabase.com/college-basketball-programs/"
+
+coach <-  read_html(coaches) %>%
+    html_nodes('ul') %>%
+    html_nodes('a') %>%
+    html_attr('href')
+coach
