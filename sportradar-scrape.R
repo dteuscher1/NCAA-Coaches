@@ -1,32 +1,41 @@
 library(rjson)
 library(tidyverse)
+library(listviewer)
+library(xml2)
+library(rvest)
 
+# Url/API to scrape: https://www.coachesdatabase.com/college-basketball-programs/
+# https://developer.sportradar.com/docs/read/basketball/NCAA_Mens_Basketball_v7#rankings-by-week
+
+# API Key
 trial_key <- "57yjy9e3bg2psxjqhs7qznef"
 
-sport_radar_url <- "https://api.sportradar.us/ncaamb/trial/v7/en/games/2022/1/15/schedule.json?api_key=57yjy9e3bg2psxjqhs7qznef"
-
-ncaa_m <- sport_radar_url %>%
-    rjson::fromJSON(file = .)
-test_obs <- ncaa_m$games[[1]] %>% data.frame()
-
-# glue package
-
-test_obs
-
+# Scrape Sport Radar for team information and their ids
 url <- "https://api.sportradar.us/ncaamb/trial/v7/en/league/hierarchy.json?api_key=57yjy9e3bg2psxjqhs7qznef"
+
+# Extract json information
 league <- url %>%
     rjson::fromJSON(file = .)
 
-library(listviewer)
+# Use the listviewer package to look at the hierarchy of the 
+# returned list in an interactive viewer
 jsonedit(league)
 
-# Conferences: Pac-12: 1; Big 12: 4; ACC: 17; SEC: 23; Big 10: 25; WCC 30; Big East: 31;
+# Conferences: 
+# Pac-12: 1; Big 12: 4; ACC: 17; SEC: 23; Big 10: 25; WCC 30; Big East: 31;
+
+# Create empty data frame to store team information
 team_info <- data.frame()
+# List elements for the conferences I want to examine
 conf_id <- c(1, 4, 17, 23, 25, 30, 31)
+# Loop through each conference and pull information about the teams
 for(i in 1:length(conf_id)){
+    # Extract the conference and get the conference name and alias
     conf <- league$divisions[[8]]$conferences[[conf_id[i]]]
     conf_name <- conf$name
     conf_alias <- conf$alias
+    # Loop through each team in the conference and get the id,
+    # name, market, and the team alias and append to the data frame.
     for(j in 1:length(conf$teams)){
         info <- conf$teams[[j]] %>% 
             data.frame() %>%
@@ -37,15 +46,44 @@ for(i in 1:length(conf_id)){
     }
 }
 
-head(team_info)
-tail(team_info)
-library(xml2)
-library(rvest)
-library(rjson)
+# Scrape information about the coaches for each team from this site
 coaches <- "https://www.coachesdatabase.com/college-basketball-programs/"
 
+# Extract the href for all of the links on the page
 coach <-  read_html(coaches) %>%
     html_nodes('ul') %>%
     html_nodes('a') %>%
     html_attr('href')
-coach
+
+# Combine the name and market to get the full team name and remove any 
+# punctuation or (fl) (for Miami Hurricanes) and rename entry for NC State
+team_name <- tolower(paste(team_info$market, team_info$name)) %>% 
+    str_remove_all("[\\.']") %>%
+    str_remove_all("&") %>% 
+    str_remove_all(" \\(fl\\)") %>%
+    str_replace("north carolina state", "nc state") %>%
+    str_replace_all(" ", "-")
+
+# Extract the href for each team by detecting the team name in the href string
+team_href <- sapply(team_name, FUN = function(x) coach[str_detect(coach, x)], simplify = FALSE, USE.NAMES = FALSE) %>% unlist()
+
+# Create an empty list to store coach information
+team_coach_df <- list()
+
+# Open progress bar to see scraping progress
+pb <- txtProgressBar(min = 0, max = length(team_name), style = 3)
+
+# Loop through the teams and scrape the table with information about all of the
+# coaches for a team.
+for(i in 1:length(team_href)){
+    # Extract the table with the coaches for a team over their history
+    coach_page <- read_html(team_href[i]) %>%
+        html_table(header = TRUE) %>%
+        data.frame()
+    team_coach_df[[i]] <- coach_page
+    # Print out the current team being scraped and increase progress bar
+    cat("\n Retrieving data for", team_name[i], '\n')
+    setTxtProgressBar(pb, i)
+}
+close(pb)
+
