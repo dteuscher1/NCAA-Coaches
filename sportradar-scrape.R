@@ -87,3 +87,40 @@ for(i in 1:length(team_href)){
 }
 close(pb)
 
+# Get schedule for the years
+library(glue)
+years <- 2019:2021
+season <- c("CT", "REG", "PST")
+#game_info <- c()
+for(i in years){
+    for(j in season){
+        Sys.sleep(1)
+        url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{i}/{j}/schedule.json?api_key={trial_key}")
+        schedule <- url %>%
+            rjson::fromJSON(file = .)
+        if(length(schedule$games) > 0){
+            pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
+                                   total = length(schedule$games))
+            pb$tick(0)
+            for(k in 1:length(schedule$games)){
+                if(schedule$games[[k]]$status == "cancelled"){
+                    next
+                }
+                game_id <- schedule$games[[k]]$id
+                home_id <- schedule$games[[k]]$home$id
+                away_id <- schedule$games[[k]]$away$id
+                date <- schedule$games[[k]]$scheduled
+                game <- data.frame(game_id = game_id, home_id = home_id, 
+                                   away_id = away_id, date = date, game_type = j)
+                game_info <- game_info %>% bind_rows(game)
+                pb$tick()
+                Sys.sleep(1/100)
+            }
+        }else{
+            next
+        }    
+    }
+}
+
+write.csv(game_info, "games.csv")
+
