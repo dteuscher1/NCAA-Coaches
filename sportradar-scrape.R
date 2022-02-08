@@ -46,6 +46,8 @@ for(i in 1:length(conf_id)){
     }
 }
 
+write.csv(team_info, "team_ids.csv")
+
 # Scrape information about the coaches for each team from this site
 coaches <- "https://www.coachesdatabase.com/college-basketball-programs/"
 
@@ -86,7 +88,7 @@ for(i in 1:length(team_href)){
     setTxtProgressBar(pb, i)
 }
 close(pb)
-
+head(team_coach_df)
 # Get schedule for the years
 library(glue)
 years <- 2019:2021
@@ -123,4 +125,33 @@ for(i in years){
 }
 
 write.csv(game_info, "games.csv")
+
+game_info <- read.csv("games.csv")
+
+
+attempt <- game_info %>% left_join(team_info, by = c('home_id' = 'id')) %>%
+    left_join(team_info, by = c('away_id' = 'id'), suffix = c(".home", ".away")) %>%
+    filter(!is.na(name.home) & !is.na(name.away))
+head(attempt)
+byu <- attempt %>% filter(alias.home == "BYU" | alias.away == "BYU")
+unique(attempt$game_id)
+team_info %>% filter(market %in% c("Louisville", "Michigan"))
+
+test_game_id <- attempt$game_id[1]
+library(glue)
+url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{test_game_id}/pbp.json?api_key={trial_key}")
+single_game <- url %>%
+    rjson::fromJSON(file = .)
+
+jsonedit(single_game)
+try_frame <- single_game$periods[[1]]$events %>% data.frame()
+
+# Loop through each single game
+# Loop through each half (and overtime for necessary games)
+# For each play, extract play number, possession id, team with possession, clock, location_x, location_y,
+# event_type, home points, away points, team_basket
+
+
+
+
 
