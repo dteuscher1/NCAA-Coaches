@@ -131,27 +131,68 @@ game_info <- read.csv("games.csv")
 
 attempt <- game_info %>% left_join(team_info, by = c('home_id' = 'id')) %>%
     left_join(team_info, by = c('away_id' = 'id'), suffix = c(".home", ".away")) %>%
-    filter(!is.na(name.home) & !is.na(name.away))
+    filter(!is.na(name.home) | !is.na(name.away))
 head(attempt)
 byu <- attempt %>% filter(alias.home == "BYU" | alias.away == "BYU")
 unique(attempt$game_id)
 team_info %>% filter(market %in% c("Louisville", "Michigan"))
 
-test_game_id <- attempt$game_id[1]
+pbp_game_id <- attempt$game_id
 library(glue)
 url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{test_game_id}/pbp.json?api_key={trial_key}")
 single_game <- url %>%
     rjson::fromJSON(file = .)
 
 jsonedit(single_game)
-try_frame <- single_game$periods[[1]]$events %>% data.frame()
-
+key_test <- list()
+for(i in 143:300){
+    game_id <- pbp_game_id[i]
+    game_data <- tryCatch(
+        expr = {
+            url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{game_id}/pbp.json?api_key={trial_key}")
+            data <- url %>%
+                rjson::fromJSON(file = .)},
+        error = function(cond){NA},
+        warning = function(cond){NA})
+    key_test[[i]] <- game_data
+    Sys.sleep(1/100)
+}
 # Loop through each single game
 # Loop through each half (and overtime for necessary games)
 # For each play, extract play number, possession id, team with possession, clock, location_x, location_y,
 # event_type, home points, away points, team_basket
+library(progress)
+keys_info <- readxl::read_excel("../API-keys.xlsx")
+key_test <- list()
+counter <- 0
+counter2 <- 0
+pbp_game_id <- attempt$game_id
+pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
+                       total = nrow(keys_info)*1000)
+for(i in 1:nrow(keys_info)){
+    counter <- counter + 1
+    trial_key <- keys_info$Trial_Key[i]
+    for(j in 1:1000){
+        counter2 <- counter2 + 1
+        if(counter2 < length(pbp_game_id)){
+            game_id <- pbp_game_id[counter2]
+            game_data <- tryCatch(
+                expr = {
+                    url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{game_id}/pbp.json?api_key={trial_key}")
+                    data <- url %>%
+                        rjson::fromJSON(file = .)},
+                error = function(cond){NA},
+                warning = function(cond){NA})
+            if(length(game_data) > 1){
+                key_test[[counter2]] <- game_data
+            }
+            pb$tick()
+            Sys.sleep(1)
+        }
+        else {
+            next
+        }
+    }
+}
 
-
-
-
-
+saveRDS(key_test, "pbp_data.RDS")
