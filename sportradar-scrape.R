@@ -89,6 +89,17 @@ for(i in 1:length(team_href)){
 }
 close(pb)
 head(team_coach_df)
+team_coaches <- data.frame()
+counter <- 0
+for(i in 1:length(team_coach_df)){
+    frame <- team_coach_df[[i]] %>% separate(Tenure, into = c("Start", "End"), sep = "-") %>% 
+        mutate(Team = team_info$market[i], 
+               TeamID = team_info$id[i])
+    team_coach_df[[i]] <- frame
+    #team_coaches <- team_coaches %>% bind_rows(frame)
+    #counter <- counter + 1
+}
+team_coach_df[[12]]
 # Get schedule for the years
 library(glue)
 years <- 2019:2021
