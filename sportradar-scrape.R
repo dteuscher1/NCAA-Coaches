@@ -17,11 +17,11 @@ url <- "https://api.sportradar.us/ncaamb/trial/v7/en/league/hierarchy.json?api_k
 league <- url %>%
     rjson::fromJSON(file = .)
 
-# Use the listviewer package to look at the hierarchy of the 
+# Use the listviewer package to look at the hierarchy of the
 # returned list in an interactive viewer
 jsonedit(league)
 
-# Conferences: 
+# Conferences:
 # Pac-12: 1; Big 12: 4; ACC: 17; SEC: 23; Big 10: 25; WCC 30; Big East: 31;
 
 # Create empty data frame to store team information
@@ -37,10 +37,10 @@ for(i in 1:length(conf_id)){
     # Loop through each team in the conference and get the id,
     # name, market, and the team alias and append to the data frame.
     for(j in 1:length(conf$teams)){
-        info <- conf$teams[[j]] %>% 
+        info <- conf$teams[[j]] %>%
             data.frame() %>%
             dplyr::select(id, name, market, alias) %>%
-            mutate(conference = conf_name, 
+            mutate(conference = conf_name,
                    conf_alias = conf_alias)
         team_info <- team_info %>% bind_rows(info)
     }
@@ -57,11 +57,11 @@ coach <-  read_html(coaches) %>%
     html_nodes('a') %>%
     html_attr('href')
 
-# Combine the name and market to get the full team name and remove any 
+# Combine the name and market to get the full team name and remove any
 # punctuation or (fl) (for Miami Hurricanes) and rename entry for NC State
-team_name <- tolower(paste(team_info$market, team_info$name)) %>% 
+team_name <- tolower(paste(team_info$market, team_info$name)) %>%
     str_remove_all("[\\.']") %>%
-    str_remove_all("&") %>% 
+    str_remove_all("&") %>%
     str_remove_all(" \\(fl\\)") %>%
     str_replace("north carolina state", "nc state") %>%
     str_replace_all(" ", "-")
@@ -88,12 +88,14 @@ for(i in 1:length(team_href)){
     setTxtProgressBar(pb, i)
 }
 close(pb)
+
+saveRDS(team_coach_df, "coaches_data.RDS")
 head(team_coach_df)
 team_coaches <- data.frame()
 counter <- 0
 for(i in 1:length(team_coach_df)){
-    frame <- team_coach_df[[i]] %>% separate(Tenure, into = c("Start", "End"), sep = "-") %>% 
-        mutate(Team = team_info$market[i], 
+    frame <- team_coach_df[[i]] %>% separate(Tenure, into = c("Start", "End"), sep = "-") %>%
+        mutate(Team = team_info$market[i],
                TeamID = team_info$id[i])
     team_coach_df[[i]] <- frame
     #team_coaches <- team_coaches %>% bind_rows(frame)
@@ -123,7 +125,7 @@ for(i in years){
                 home_id <- schedule$games[[k]]$home$id
                 away_id <- schedule$games[[k]]$away$id
                 date <- schedule$games[[k]]$scheduled
-                game <- data.frame(game_id = game_id, home_id = home_id, 
+                game <- data.frame(game_id = game_id, home_id = home_id,
                                    away_id = away_id, date = date, game_type = j)
                 game_info <- game_info %>% bind_rows(game)
                 pb$tick()
@@ -131,7 +133,7 @@ for(i in years){
             }
         }else{
             next
-        }    
+        }
     }
 }
 
@@ -142,7 +144,7 @@ game_info <- read.csv("games.csv")
 
 attempt <- game_info %>% left_join(team_info, by = c('home_id' = 'id')) %>%
     left_join(team_info, by = c('away_id' = 'id'), suffix = c(".home", ".away")) %>%
-    filter(!is.na(name.home) | !is.na(name.away))
+    filter(!is.na(name.home) & !is.na(name.away))
 head(attempt)
 byu <- attempt %>% filter(alias.home == "BYU" | alias.away == "BYU")
 unique(attempt$game_id)
@@ -155,8 +157,16 @@ single_game <- url %>%
     rjson::fromJSON(file = .)
 
 jsonedit(single_game)
+
+
+library(progress)
+keys_info <- readxl::read_excel("../API-keys.xlsx")
+trial_key <- keys_info$Trial_Key[17]
 key_test <- list()
-for(i in 143:300){
+pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
+                       total = length(8992:9462))
+trial_key <- "9xtb9s2ecm9prt44zryhk99u"
+for(i in 8992:9462){
     game_id <- pbp_game_id[i]
     game_data <- tryCatch(
         expr = {
@@ -165,9 +175,11 @@ for(i in 143:300){
                 rjson::fromJSON(file = .)},
         error = function(cond){NA},
         warning = function(cond){NA})
-    key_test[[i]] <- game_data
-    Sys.sleep(1/100)
+    key_test[[i-8991]] <- game_data
+    pb$tick()
+    Sys.sleep(1/10)
 }
+saveRDS(key_test, "pbp_last.RDS")
 # Loop through each single game
 # Loop through each half (and overtime for necessary games)
 # For each play, extract play number, possession id, team with possession, clock, location_x, location_y,
