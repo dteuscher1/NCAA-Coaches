@@ -1,11 +1,16 @@
 coaches <- readRDS("coaches_data.RDS")
 library(tidyverse)
+team_info <- read.csv("team_ids.csv")
 one_frame <- coaches[[2]] %>% separate(Tenure, c("Start", "End"), sep = "-") 
 coach_df <- data.frame()
 for(coach in 1:length(coaches)){
     one_frame <- coaches[[coach]] %>% separate(Tenure, c("Start", "End"), sep = "-") %>%
-        mutate(End = as.numeric(ifelse(End == "Pres", 2022, End))) %>% 
-        dplyr::select(Coach, Start, End)
+        mutate(End = as.numeric(ifelse(End == "Pres", 2022, End)),
+               team_name = team_info$name[coach],
+               team_market = team_info$market[coach],
+               team_id = team_info$id[coach],
+               conference = team_info$conf_alias[coach]) %>% 
+        dplyr::select(Coach, Start, End, team_name, team_market, team_id, conference)
     rows <- c()
     for(i in 1:nrow(one_frame)){
         if(as.numeric(one_frame$Start[i]) > 2013){
@@ -26,6 +31,18 @@ for(coach in 1:length(coaches)){
         
     }
     coach_df <- coach_df %>% bind_rows(one_frame[rows, ])
-    print(coach)
 }
+
+seasons <- read.csv("../season_dates.csv")
+
+clean_coach_df <- coach_df %>%
+    mutate(End = ifelse(is.na(End), Start, End),
+           End = ifelse(nchar(End) == 2, paste0(20, End), End),
+           Start = as.numeric(Start), 
+           End = as.numeric(End), 
+           End_Merge = End - 1) %>%
+    filter(Coach != "vacant") %>% 
+    inner_join(seasons %>% dplyr::select(Season, Start_Date), by = c('Start' = 'Season')) %>%
+    inner_join(seasons %>% dplyr::select(Season, End_Date), by = c('End_Merge' = 'Season')) %>%
+    dplyr::select(-End_Merge)
 
