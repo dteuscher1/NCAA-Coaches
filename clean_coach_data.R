@@ -33,7 +33,7 @@ for(coach in 1:length(coaches)){
     coach_df <- coach_df %>% bind_rows(one_frame[rows, ])
 }
 
-seasons <- read.csv("../season_dates.csv")
+seasons <- read.csv("season_dates.csv")
 
 clean_coach_df <- coach_df %>%
     mutate(End = ifelse(is.na(End), Start, End),
@@ -44,5 +44,22 @@ clean_coach_df <- coach_df %>%
     filter(Coach != "vacant") %>% 
     inner_join(seasons %>% dplyr::select(Season, Start_Date), by = c('Start' = 'Season')) %>%
     inner_join(seasons %>% dplyr::select(Season, End_Date), by = c('End_Merge' = 'Season')) %>%
-    dplyr::select(-End_Merge)
+    dplyr::select(-End_Merge) %>%
+    mutate(Coach = str_replace(Coach, "\\*\\*", ""), 
+           Coach = str_trim(str_replace(Coach, "\\([A-Za-z.]+\\)", ""))) %>%
+    filter(Coach != "Tony Benford")
+View(clean_coach_df)
+# remove benford
+interim <- read.csv("interim_coaches.csv")
 
+for(i in 1:nrow(interim)){
+    counter <- 1
+    while((clean_coach_df$Coach[counter] != interim$Coach[i]) | (clean_coach_df$team_market[counter] != interim$Team[i])){
+        counter <- counter + 1
+    }
+    clean_coach_df$Start_Date[counter] <- interim$Actual_Start[i]
+    clean_coach_df$End_Date[counter] <- interim$Actual_End[i]
+    
+}
+
+write.csv(clean_coach_df, "coaches_data.csv")
