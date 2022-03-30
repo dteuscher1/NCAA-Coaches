@@ -1,24 +1,35 @@
+## Author: David Teuscher
+## Last Edited: 03.30.22
+## This script scrapes team information, schedule data, and play by play data
+## from Sportradar from 2013-2022 for NCAAMB games. It also scrapes coach
+## information from the Coaches Database
+##############################################################################
+
+# Load needed modules
 library(rjson)
 library(tidyverse)
 library(listviewer)
 library(xml2)
 library(rvest)
+library(glue)
+library(progress)
 
 # Url/API to scrape: https://www.coachesdatabase.com/college-basketball-programs/
 # https://developer.sportradar.com/docs/read/basketball/NCAA_Mens_Basketball_v7#rankings-by-week
 
 # API Key
-trial_key <- "57yjy9e3bg2psxjqhs7qznef"
+trial_key <- insert_key_here
 
 # Scrape Sport Radar for team information and their ids
-url <- "https://api.sportradar.us/ncaamb/trial/v7/en/league/hierarchy.json?api_key=57yjy9e3bg2psxjqhs7qznef"
+url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/league/hierarchy.json?api_key={trial_key}")
 
 # Extract json information
 league <- url %>%
     rjson::fromJSON(file = .)
 
 # Use the listviewer package to look at the hierarchy of the
-# returned list in an interactive viewer
+# returned list in an interactive viewer and determine where the 
+# conference of interest are located in the list
 jsonedit(league)
 
 # Conferences:
@@ -46,6 +57,7 @@ for(i in 1:length(conf_id)){
     }
 }
 
+# Write out the team information to a .csv file
 write.csv(team_info, "team_ids.csv")
 
 # Scrape information about the coaches for each team from this site
@@ -67,7 +79,8 @@ team_name <- tolower(paste(team_info$market, team_info$name)) %>%
     str_replace_all(" ", "-")
 
 # Extract the href for each team by detecting the team name in the href string
-team_href <- sapply(team_name, FUN = function(x) coach[str_detect(coach, x)], simplify = FALSE, USE.NAMES = FALSE) %>% unlist()
+team_href <- sapply(team_name, FUN = function(x) coach[str_detect(coach, x)], 
+                    simplify = FALSE, USE.NAMES = FALSE) %>% unlist()
 
 # Create an empty list to store coach information
 team_coach_df <- list()
@@ -89,116 +102,94 @@ for(i in 1:length(team_href)){
 }
 close(pb)
 
+# Save the list of the coach data frames to a .RDS file
 saveRDS(team_coach_df, "coaches_data.RDS")
-head(team_coach_df)
-team_coaches <- data.frame()
-counter <- 0
-for(i in 1:length(team_coach_df)){
-    frame <- team_coach_df[[i]] %>% separate(Tenure, into = c("Start", "End"), sep = "-") %>%
-        mutate(Team = team_info$market[i],
-               TeamID = team_info$id[i])
-    team_coach_df[[i]] <- frame
-    #team_coaches <- team_coaches %>% bind_rows(frame)
-    #counter <- counter + 1
-}
-team_coach_df[[12]]
+
 # Get schedule for the years
 library(glue)
-years <- 2019:2021
+years <- 2013:2021
+# Types of games
+# CT: Conference tournament
+# REG: Regular season
+# PST: Postseason
 season <- c("CT", "REG", "PST")
-#game_info <- c()
+# Loop through all the years
 for(i in years){
+    # Loop through each of the type of games
     for(j in season){
+        # Add in sleep time for scraping
         Sys.sleep(1)
+        # Create string of the url
         url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{i}/{j}/schedule.json?api_key={trial_key}")
+        # Pull the info into a list
         schedule <- url %>%
             rjson::fromJSON(file = .)
+        # Check to make sure there are games
         if(length(schedule$games) > 0){
+            # Start a progress bar
             pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
                                    total = length(schedule$games))
+            # Initialize the progress bar
             pb$tick(0)
+            # Loop through each game in the schedule
             for(k in 1:length(schedule$games)){
+                # Skip over any cancelled games
                 if(schedule$games[[k]]$status == "cancelled"){
                     next
                 }
+                # Extract the game id, home team id, away team id, and date
                 game_id <- schedule$games[[k]]$id
                 home_id <- schedule$games[[k]]$home$id
                 away_id <- schedule$games[[k]]$away$id
                 date <- schedule$games[[k]]$scheduled
+                # Combine the variables into a single data frame and bind to the master data frame
                 game <- data.frame(game_id = game_id, home_id = home_id,
                                    away_id = away_id, date = date, game_type = j)
                 game_info <- game_info %>% bind_rows(game)
+                # Move the progress bar forward
                 pb$tick()
                 Sys.sleep(1/100)
             }
+            # Move to the next one if there are no games
         }else{
             next
         }
     }
 }
-
+# Write the game information to a csv file
 write.csv(game_info, "games.csv")
 
+# Read in the game info 
 game_info <- read.csv("games.csv")
 
-
-attempt <- game_info %>% left_join(team_info, by = c('home_id' = 'id')) %>%
+# Combine the schedule information with the team information
+game_team_info <- game_info %>% left_join(team_info, by = c('home_id' = 'id')) %>%
     left_join(team_info, by = c('away_id' = 'id'), suffix = c(".home", ".away")) %>%
     filter(!is.na(name.home) & !is.na(name.away))
-head(attempt)
-byu <- attempt %>% filter(alias.home == "BYU" | alias.away == "BYU")
-unique(attempt$game_id)
-team_info %>% filter(market %in% c("Louisville", "Michigan"))
 
-pbp_game_id <- attempt$game_id
-library(glue)
-url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{test_game_id}/pbp.json?api_key={trial_key}")
-single_game <- url %>%
-    rjson::fromJSON(file = .)
+# Extract the game ids for all games
+pbp_game_id <- game_team_info$game_id
 
-jsonedit(single_game)
-
-
-library(progress)
+# Read in data containing information about API keys
 keys_info <- readxl::read_excel("../API-keys.xlsx")
-trial_key <- keys_info$Trial_Key[17]
+# Create empty list to store lists with play by play data
 key_test <- list()
+# Initialize a progress par
 pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
-                       total = length(8992:9462))
-trial_key <- "9xtb9s2ecm9prt44zryhk99u"
-for(i in 8992:9462){
-    game_id <- pbp_game_id[i]
-    game_data <- tryCatch(
-        expr = {
-            url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{game_id}/pbp.json?api_key={trial_key}")
-            data <- url %>%
-                rjson::fromJSON(file = .)},
-        error = function(cond){NA},
-        warning = function(cond){NA})
-    key_test[[i-8991]] <- game_data
-    pb$tick()
-    Sys.sleep(1/10)
-}
-saveRDS(key_test, "pbp_last.RDS")
-# Loop through each single game
-# Loop through each half (and overtime for necessary games)
-# For each play, extract play number, possession id, team with possession, clock, location_x, location_y,
-# event_type, home points, away points, team_basket
-library(progress)
-keys_info <- readxl::read_excel("../API-keys.xlsx")
-key_test <- list()
-counter <- 0
-counter2 <- 0
-pbp_game_id <- attempt$game_id
-pb <- progress_bar$new(format = "  downloading [:bar] :percent eta: :eta",
-                       total = nrow(keys_info)*1000)
-for(i in 1:nrow(keys_info)){
+                       total = length(pbp_game_id))
+# Loop through the different API keys
+for(j in 1:10){
+    # Specify the key and counter
+    trial_key <- keys_info$Trial_Key[j]
     counter <- counter + 1
-    trial_key <- keys_info$Trial_Key[i]
-    for(j in 1:1000){
-        counter2 <- counter2 + 1
-        if(counter2 < length(pbp_game_id)){
+    # Pull 1000 games with each key
+    for(i in 1:1000){
+        counter2 <- counter * 1000
+        # Check to make sure there are still games to pull
+        if(counter2 <= length(pbp_game_id)){
+            # Get the game ID
             game_id <- pbp_game_id[counter2]
+            # Try to pull play by play data for the game; return NA if warnings or errors occur
             game_data <- tryCatch(
                 expr = {
                     url <- glue("https://api.sportradar.us/ncaamb/trial/v7/en/games/{game_id}/pbp.json?api_key={trial_key}")
@@ -206,16 +197,18 @@ for(i in 1:nrow(keys_info)){
                         rjson::fromJSON(file = .)},
                 error = function(cond){NA},
                 warning = function(cond){NA})
-            if(length(game_data) > 1){
-                key_test[[counter2]] <- game_data
-            }
+            # Put play by play data into the list
+            key_test[[counter2]] <- game_data
             pb$tick()
-            Sys.sleep(1)
-        }
-        else {
+            Sys.sleep(1/10)
+        } else{
             next
+            pb$tick()
         }
+        
     }
-}
+}    
 
-saveRDS(key_test, "pbp_data.RDS")
+# Save the pbp data to a RDS file
+saveRDS(key_test, "pbp_last.RDS")
+
