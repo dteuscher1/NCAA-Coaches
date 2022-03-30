@@ -4,16 +4,42 @@ team_info <- read.csv("team_ids.csv")
 one_frame <- coaches[[2]] %>% separate(Tenure, c("Start", "End"), sep = "-") 
 coach_df <- data.frame()
 for(coach in 1:length(coaches)){
-    one_frame <- coaches[[coach]] %>% separate(Tenure, c("Start", "End"), sep = "-") %>%
-        mutate(End = as.numeric(ifelse(End == "Pres", 2022, End)),
-               team_name = team_info$name[coach],
-               team_market = team_info$market[coach],
-               team_id = team_info$id[coach],
-               conference = team_info$conf_alias[coach]) %>% 
-        dplyr::select(Coach, Start, End, team_name, team_market, team_id, conference)
+    if(coach == 85){
+        one_frame <- coaches[[coach]] %>% separate(Tenure, c("Start", "End"), sep = "-")
+        one_frame$Start[2] <- 2015
+        one_frame$End[2] <- 2021
+        one_frame <- one_frame %>% 
+            mutate(End = as.numeric(ifelse(End == "Pres", 2022, End)),
+                   team_name = team_info$name[coach],
+                   team_market = team_info$market[coach],
+                   team_id = team_info$id[coach],
+                   conference = team_info$conf_alias[coach]) %>% 
+            dplyr::select(Coach, Start, End, team_name, team_market, team_id, conference)
+    } else if(coach == 66){
+        one_frame <- coaches[[coach]] %>% separate(Tenure, c("Start", "End"), sep = "-")
+        one_frame$Start[1] <- 2018
+        one_frame$End[1] <- "Pres"
+        one_frame$Start[2] <- 2011
+        one_frame$End[2] <- 2018
+        one_frame <- one_frame %>% 
+            mutate(End = as.numeric(ifelse(End == "Pres", 2022, End)),
+                   team_name = team_info$name[coach],
+                   team_market = team_info$market[coach],
+                   team_id = team_info$id[coach],
+                   conference = team_info$conf_alias[coach]) %>% 
+            dplyr::select(Coach, Start, End, team_name, team_market, team_id, conference)
+    } else {
+        one_frame <- coaches[[coach]] %>% separate(Tenure, c("Start", "End"), sep = "-") %>%
+            mutate(End = as.numeric(ifelse(End == "Pres", 2022, End)),
+                   team_name = team_info$name[coach],
+                   team_market = team_info$market[coach],
+                   team_id = team_info$id[coach],
+                   conference = team_info$conf_alias[coach]) %>% 
+            dplyr::select(Coach, Start, End, team_name, team_market, team_id, conference)
+    }    
     rows <- c()
     for(i in 1:nrow(one_frame)){
-        if(as.numeric(one_frame$Start[i]) > 2013){
+        if(as.numeric(one_frame$Start[i]) >= 2013){
             rows <- c(rows, i)
         }
         if(i == 1){
@@ -46,8 +72,11 @@ clean_coach_df <- coach_df %>%
     inner_join(seasons %>% dplyr::select(Season, End_Date), by = c('End_Merge' = 'Season')) %>%
     dplyr::select(-End_Merge) %>%
     mutate(Coach = str_replace(Coach, "\\*\\*", ""), 
-           Coach = str_trim(str_replace(Coach, "\\([A-Za-z.]+\\)", ""))) %>%
-    filter(Coach != "Tony Benford")
+           Coach = str_trim(str_replace(Coach, "\\([A-Za-z.]+\\)", "")),
+           team_market = str_replace(team_market, "BYU", "Brigham Young")) %>%
+    filter(Coach != "Tony Benford") %>%
+    filter(Coach != "Bob Cantu")
+    
 View(clean_coach_df)
 # remove benford
 interim <- read.csv("interim_coaches.csv")
