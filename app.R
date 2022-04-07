@@ -10,7 +10,7 @@ ui <- dashboardPage(
         sidebarMenu(
             menuItem("Overview", tabName = "view", icon = icon("info")),
             menuItem("Coach Information", tabName = "table", icon = icon("table")),
-            menuItem("Expected vs. Actual Points", tabName = 'expect', icon = icon("chart-line")),
+            menuItem("Expected vs. Actual", tabName = 'expect', icon = icon("chart-line")),
             menuItem("Location Results", tabName = 'loc', icon = icon("map-pin"))
         )
     ),
@@ -22,13 +22,13 @@ ui <- dashboardPage(
                         box(
                             width = 10,
                             h1(strong("Analyzing NCAA Coaches on Plays out of Timeouts")),
-                            p("This app takes the text of address from the General Conference of the Church of Jesus Christ of  Latter-Day Saints from April 1971 through April 2021. There are a few features of this app that can be explored, which are explained in detail below. The purpose of this app is to take analysis and visualization of text data from the General Conference addresses and presenting in an interactive and interesting way. If there are any questions or feedback, please contact Skyler Gray, David Teuscher, or Daniel Garrett"),
+                            p("This app shows the results of analyzing NCAA Men's Basketball coaches on plays out of a timeout (ATO). Play by play data was taken beginning with the 2013-2014 season through part of the 2021-2022 college basketball season and each play immediately following a timeout was extracted. Since there are over 300 Division I men's college basketball teams, only teams from the ACC, Big 12, Big 10, Big East, SEC, Pac-12, and WCC are included. The expected points per possession were modeled using a random forest, using the score differential, time remaining, and location of the shot. The expected points per possession are compared with the actual points per possession for each coach and team. The code for the analysis can be found at the GitHub repository ", a("here.", href = "https://github.com/dteuscher1/NCAA-Coaches"), "If there are any questions about this project, feel free to contact David Teuscher. Contact information can be found on my GitHub profile."),
                             h3(strong("Coach and Team Information:")),
-                            p("The speakers tab allows a user to explore the most frequently used words by a speaker throughout all of the talks they have given between April 1971 and April 2021. The top words for each speaker is displayed in a bar chart. The user also has the option to explore the topics that a speaker has talked about most frequently. The topics were obtained from tags that were given to the talks by the Church of Jesus Christ of Latter-Saints and was not done by any of us. "),
+                            p("A table showing the coach, the team they coached for, expected and actual points per possession, and the difference between expected and actual is provided for exploration. Options are provided to look at results by year as well as teams, regardless of coach"),
                             h3(strong("Expected vs. Actual")),
-                            p("The trends tab allows the user to explore the frequency of a word over time between conferences session. The option is available to explore the frequency of topics over time as well"),
+                            p("This tab shows a plot of the expected points against the actual points per possession for each coach. There are options to select a single year or over all of the years as well as an option to limit the results to a specific conference."),
                             h3(strong("Location Results:")),
-                            p("A word cloud can be created for the most frequent words during a conference session from April 1971 until April 2021")
+                            p("The location results tab shows the expected points per possession across the court, which illustrates the ideal locations to get shots that will maximize expected points per possession.")
                         ))
             ),
             # First tab content
