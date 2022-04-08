@@ -2,7 +2,8 @@ library(shiny)
 library(shinythemes)
 library(shinydashboard)
 library(shinydashboardPlus)
-
+library(DT)
+source("global.R")
 
 ui <- dashboardPage(
     dashboardHeader(),
@@ -32,7 +33,21 @@ ui <- dashboardPage(
                         ))
             ),
             # First tab content
-            tabItem(tabName = "table"
+            tabItem(tabName = "table",
+                    fluidRow(
+                        box(width = 6,
+                            column(width = 6,
+                                   selectizeInput('team2', 'Choose number of minimum plays', 1:100, 100),
+                                   actionButton('update2', 'Update'),
+                                   downloadButton("downloadData", "Download")
+                            )
+                        )
+                    ),
+                    fluidRow(
+                        box(width = 12,
+                            DT::dataTableOutput("selected")
+                        )
+                    )
             ),
             tabItem(tabName = "expect"
             ),
@@ -44,6 +59,14 @@ ui <- dashboardPage(
 
 
 server <- function(input, output, session){
+    rplot_selected <- eventReactive(input$update2, {
+        displayTable <- attempt %>% 
+            filter(`Number of Plays` > as.numeric(input$team2))
+        displayTable
+    })
+    output$selected <- renderDataTable({
+        datatable(rplot_selected(), rownames = FALSE, options = list(scrollX='400px'))
+    })
 }
 
 shinyApp(ui = ui, server = server)
