@@ -3,6 +3,8 @@ library(shinythemes)
 library(shinydashboard)
 library(shinydashboardPlus)
 library(DT)
+library(gt)
+library(cfbplotR)
 source("global.R")
 
 ui <- dashboardPage(
@@ -45,11 +47,22 @@ ui <- dashboardPage(
                     ),
                     fluidRow(
                         box(width = 12,
-                            DT::dataTableOutput("selected")
+                            gt_output("selected")
                         )
                     )
             ),
-            tabItem(tabName = "expect"
+            tabItem(tabName = "expect",
+                    fluidRow(
+                        box(
+                            selectizeInput("team_chord", "Choose a team", c("BYU")),
+                            actionButton('update1', 'Update')
+                        )    
+                    ),
+                    fluidRow(
+                        box(height = 20, width = 12,
+                            plotOutput('residual')
+                        )    
+                    )
             ),
             tabItem(tabName = "loc"
             )
@@ -60,13 +73,25 @@ ui <- dashboardPage(
 
 server <- function(input, output, session){
     rplot_selected <- eventReactive(input$update2, {
-        displayTable <- attempt %>% 
-            filter(`Number of Plays` > as.numeric(input$team2))
+        displayTable <- attempt2 %>% 
+            filter(`Number of Plays` > as.numeric(input$team2)) %>%
+            gt() %>% 
+            gt_fmt_cfb_logo(columns = c(`Conference Logo`, `Logo`)) %>%
+            gt_merge_stack_team_color(Team,`Team Name`,Team)
         displayTable
     })
-    output$selected <- renderDataTable({
-        datatable(rplot_selected(), rownames = FALSE, options = list(scrollX='400px'))
+    rplot_resid <- eventReactive(input$update1, {
+        plot <- ggplot(attempt2, aes(x = `Expected Points`, y = `Actual Points`)) +
+            geom_median_lines(aes(v_var = `Expected Points`, h_var = `Actual Points`)) +
+            geom_cfb_logos(aes(team = Team), width = 0.025) +
+            labs(y = "Actual Points per Possession",x = "Expected Points Per Possession") +
+            theme_bw()
+        plot
     })
+    output$selected <- render_gt({
+        expr = rplot_selected()
+    })
+    output$residual <- renderPlot(rplot_resid())
 }
 
 shinyApp(ui = ui, server = server)
