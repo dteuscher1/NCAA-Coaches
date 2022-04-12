@@ -1,8 +1,7 @@
 ## Author: David Teuscher
 ## Last Edited: 04.12.22
-## This script takes the coach information for all the selected teams
-## and extracts the coaches who coached from 2013-2022. The start and end dates
-## for the coaches are included as well. 
+## This script takes the coach and play by play data and get the coach
+## for a team during the game. It also adds in a season variable
 ##############################################################################
 
 # Load packages

@@ -1,3 +1,10 @@
+## Author: David Teuscher
+## Last Edited: 04.12.22
+## This script provides the code for the Shiny app presenting the results
+## of this analysis
+##############################################################################
+
+# Load packages
 library(shiny)
 library(shinythemes)
 library(shinydashboard)
@@ -5,11 +12,16 @@ library(shinydashboardPlus)
 library(DT)
 library(gt)
 library(cfbplotR)
+library(tidyverse)
+
+# Run the script that is needed for the app
 source("global.R")
 
+# Set up UI
 ui <- dashboardPage(
     dashboardHeader(),
     dashboardSidebar(
+        # Create a menu with 4 tabs; 
         sidebarMenu(
             menuItem("Overview", tabName = "view", icon = icon("info")),
             menuItem("Coach Information", tabName = "table", icon = icon("table")),
@@ -19,6 +31,8 @@ ui <- dashboardPage(
     ),
     dashboardBody(
         tabItems(
+            # Create a tab that contains text explaning the background of the project
+            # and the layout of the app
             tabItem(tabName = "view",
                     fluidRow(
                         column(1),
@@ -34,23 +48,25 @@ ui <- dashboardPage(
                             p("The location results tab shows the expected points per possession across the court, which illustrates the ideal locations to get shots that will maximize expected points per possession.")
                         ))
             ),
-            # First tab content
+            # Display a table with the top teams above their expected points per possession
             tabItem(tabName = "table",
                     fluidRow(
                         box(width = 6,
                             column(width = 6,
+                                   # Provide option to select the minimum number of plays a team/coach had
                                    selectizeInput('team2', 'Choose number of minimum plays', 1:100, 100),
-                                   actionButton('update2', 'Update'),
-                                   downloadButton("downloadData", "Download")
+                                   actionButton('update2', 'Update')
                             )
                         )
                     ),
+                    # Display the table output
                     fluidRow(
                         box(width = 12,
                             gt_output("selected")
                         )
                     )
             ),
+            # Tab that shows a plot of expected against actual
             tabItem(tabName = "expect",
                     fluidRow(
                         box(
@@ -58,28 +74,34 @@ ui <- dashboardPage(
                             actionButton('update1', 'Update')
                         )    
                     ),
+                    # Display the plot
                     fluidRow(
                         box(height = 20, width = 12,
                             plotOutput('residual')
                         )    
                     )
             ),
+            # Tab to show the expected points per possession based on location
             tabItem(tabName = "loc"
             )
         )    
     )
 )
 
-
+# Define server
 server <- function(input, output, session){
+    # Reactive function to create table
     rplot_selected <- eventReactive(input$update2, {
+        # Filter table by the number of plays
         displayTable <- attempt2 %>% 
             filter(`Number of Plays` > as.numeric(input$team2)) %>%
             gt() %>% 
+            # Format the team and conference logo
             gt_fmt_cfb_logo(columns = c(`Conference Logo`, `Logo`)) %>%
             gt_merge_stack_team_color(Team,`Team Name`,Team)
         displayTable
     })
+    # Reactive function to draw acutal vs. expected plot
     rplot_resid <- eventReactive(input$update1, {
         plot <- ggplot(attempt2, aes(x = `Expected Points`, y = `Actual Points`)) +
             geom_median_lines(aes(v_var = `Expected Points`, h_var = `Actual Points`)) +
@@ -88,10 +110,12 @@ server <- function(input, output, session){
             theme_bw()
         plot
     })
+    # Define the outputs
     output$selected <- render_gt({
         expr = rplot_selected()
     })
     output$residual <- renderPlot(rplot_resid())
 }
 
+# Deploy the app
 shinyApp(ui = ui, server = server)

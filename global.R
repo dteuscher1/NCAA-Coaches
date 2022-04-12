@@ -1,12 +1,25 @@
-library(tidyverse)
+## Author: David Teuscher
+## Last Edited: 04.12.22
+## This script manipulates the data as needed to prepare the data for the Shiny app
+##############################################################################
+
+# Read in the play data
 plays <- read.csv("model_data.csv") %>%
+    # Remove columns that are not needed
     dplyr::select(-X, -game_number, -possession_ids, -half) %>%
+    # Make the team basket into a factor
     mutate(team_basket = factor(team_basket)) %>%
+    # Remove NA location, time, or coach observations
     filter(!is.na(possession_x_location)) %>%
     filter(!is.na(time)) %>%
     filter(!is.na(game_coach))
+
+# Read in team info and model predictions
 team_info <- read.csv("team_ids.csv")
 rf_preds <- readRDS("rf_preds.RDS")
+
+# Group the plays by the team and calculate the actual and expected points
+# per possession and the number of plays out of a timeout
 attempt <- plays %>% 
     mutate(pred = rf_preds) %>% 
     group_by(timeouts_possessions) %>%
@@ -17,6 +30,8 @@ attempt <- plays %>%
     arrange(desc(diff)) %>% 
     mutate(timeouts_possessions = ifelse(timeouts_possessions == "Brigham Young", "BYU", timeouts_possessions))
 
+# Join the data with the team data and change some teams and conferences to match the 
+# strings in the cfbplotR package
 attempt2 <- attempt %>% inner_join(team_info, by = c("timeouts_possessions" = "market")) %>%
     mutate(timeouts_possessions = ifelse(timeouts_possessions == "North Carolina State", "NC State", timeouts_possessions),
            timeouts_possessions = ifelse(timeouts_possessions == "Miami (FL)", "Miami", timeouts_possessions)) %>%
@@ -28,14 +43,8 @@ attempt2 <- attempt %>% inner_join(team_info, by = c("timeouts_possessions" = "m
            Conference_logo = ifelse(Conference_logo == "Pacific 12", "Pac-12", Conference_logo),
            Team_logo = timeouts_possessions) %>%
     dplyr::select(timeouts_possessions, name, Team_logo, expected, actual, diff, n, conference, Conference_logo)
-names(attempt2) <- c("Team", "Team Name", "Logo", "Expected Points", "Actual Points", "Difference", "Number of Plays", "Conference", "Conference Logo")
-# ggplot(attempt2, aes(x = expected, y = actual)) +
-#     geom_median_lines(aes(v_var = expected, h_var = actual)) +
-#     geom_cfb_logos(aes(team = timeouts_possessions), width = 0.075) +
-#     labs(y = "Actual Points per Possession",x = "Expected Points Per Possession") +
-#     theme_bw()
 
-# library(gt)
-# attempt2 %>% gt() %>% gt_fmt_cfb_logo(columns = c(`Conference Logo`, `Logo`)) %>%
-#     gt_merge_stack_team_color(Team,`Team Name`,Team)
+# Rename the columns of the data frame
+names(attempt2) <- c("Team", "Team Name", "Logo", "Expected Points", "Actual Points", "Difference", "Number of Plays", "Conference", "Conference Logo")
+
     
