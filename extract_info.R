@@ -1,6 +1,8 @@
 ## Author: David Teuscher
 ## Last Edited: 04.12.22
-## 
+## This script takes the play by play data and extracts the information for
+## plays that occur immediately after a timeout and saves the data to 
+## a .csv file
 ##############################################################################
 
 # Load packages
