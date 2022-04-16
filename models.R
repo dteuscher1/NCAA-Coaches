@@ -48,6 +48,29 @@ tune_spec <- rand_forest(mtry = tune(),
     set_mode("regression") %>%
     set_engine("ranger", num.threads = cores)
 
+xgb_model <- boost_tree(trees = 1000,
+                        tree_depth = tune(),
+                        min_n = tune(), 
+                        loss_reduction = tune(),                     ## first three: model complexity
+                        sample_size = tune(), 
+                        mtry = tune(),         ## randomness
+                        learn_rate = tune()) %>%
+    set_mode("regression") %>%
+    set_engine("xgboost")
+xgb_grid <- grid_latin_hypercube(
+    tree_depth(),
+    min_n(),
+    loss_reduction(),
+    sample_size = sample_prop(),
+    finalize(mtry(), train_data),
+    learn_rate(),
+    size = 20
+)
+
+xgb_wflow <- workflow() %>%
+    add_recipe(plays_rec) %>%
+    add_model(xgb_model)
+
 plays_wflow <- workflow() %>%
     add_recipe(plays_rec) %>%
     add_model(tune_spec)
@@ -58,9 +81,19 @@ plays_tune <- plays_wflow %>%
     tune_grid(resamples = folds,
          grid = 25) 
 
+doParallel::registerDoParallel()
+
+xgb_tune <- xgb_wflow %>%
+    tune_grid(resamples = folds, 
+              grid = xgb_grid)
+
 plays_tune %>% collect_metrics(metric = "rmse")
 
+xgb_tune %>% collect_metrics(metric = "rmse")
+
 plays_tune %>% select_best(metric = "rmse")
+
+xgb_tune %>% select_best(metric = "rmse")
 
 data_split <- initial_split(plays, prop = 3/4)
 
@@ -74,32 +107,67 @@ plays_model <- rand_forest(mtry = 2,
     set_mode("regression") %>%
     set_engine("ranger", num.threads = cores)
 
+xgb_model <- boost_tree(trees = 1000,
+                        tree_depth = 8,
+                        min_n = 6, 
+                        loss_reduction = .518,                     ## first three: model complexity
+                        sample_size = .9, 
+                        mtry = 3,         ## randomness
+                        learn_rate = .00821) %>%
+    set_mode("regression") %>%
+    set_engine("xgboost")
+
 plays_wflow <- workflow() %>%
     add_recipe(plays_rec) %>%
     add_model(plays_model)
 
+xgb_wflow <- workflow() %>%
+    add_recipe(plays_rec) %>%
+    add_model(xgb_model)
+
 plays_fit_rs <- plays_wflow %>% 
     fit_resamples(folds)
 
+xgb_fit_rs <- xgb_wflow %>%
+    fit_resamples(folds)
+
 collect_metrics(plays_fit_rs)
+collect_metrics(xgb_fit_rs)
 
 plays_fit <- plays_wflow %>%
     fit(train_data)
 
+xgb_fit <- xgb_wflow %>%
+    fit(train_data)
+
 plays_testing_pred <- predict(plays_fit, test_data) %>% 
-    bind_cols(test_data %>% select(possession_score))
+    bind_cols(test_data %>% select(possession_score)) %>%
+    bind_cols(predict(xgb_fit, test_data)) %>%
+    rename(RF = .pred...1,
+           XGB = .pred...3)
 
 plays_testing_pred %>% 
-    rmse(possession_score, .pred)
+    rmse(possession_score, RF)
+
+plays_testing_pred %>% 
+    rmse(possession_score, XGB)
 
 plays_fit_all <- plays_wflow %>%
     fit(plays)
+xgb_fit_all <- xgb_wflow %>%
+    fit(plays)
 
-plays_testing_pred <- predict(plays_fit_all, plays) %>% 
-    bind_cols(plays %>% select(possession_score))
+plays_testing_pred <- predict(plays_fit_all, test_data) %>% 
+    bind_cols(test_data %>% select(possession_score)) %>%
+    bind_cols(predict(xgb_fit_all, test_data)) %>%
+    rename(RF = .pred...1,
+           XGB = .pred...3)
 
 plays_testing_pred %>% 
-    rmse(possession_score, .pred)
+    rmse(possession_score, RF)
+
+plays_testing_pred %>% 
+    rmse(possession_score, XGB)
 
 plays2 <- plays %>% 
     #dplyr::select(-X, -game_number, -possession_ids, -half) %>%
