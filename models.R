@@ -7,61 +7,102 @@
 # Load packages
 library(DataExplorer)
 library(tidyverse)
+library(tidymodels)
 
 plays <- read.csv("model_data_v2.csv") 
 
-# %>%
-#     dplyr::select(-X, -game_number, -possession_ids, -half) %>%
-#     mutate(team_basket = factor(team_basket)) %>%
-#     filter(!is.na(possession_x_location)) %>%
-#     filter(!is.na(time)) %>%
-#     filter(!is.na(game_coach))
 
 plot_missing(plays)
 
-library(tidymodels)
-plot_missing(plays)
 
+
+plays <- plays %>%
+    dplyr::select(-X, -game_number, -possession_ids, -half) %>%
+    mutate(team_basket = factor(team_basket)) %>%
+    filter(!is.na(possession_x_location)) %>%
+    filter(!is.na(time)) %>%
+    filter(!is.na(game_coach)) %>%
+    filter(!is.na(season))  %>% 
+    filter((team_basket == "right" & possession_x_location > 550) | (team_basket == "left" & possession_x_location < 450)) %>%
+    filter(possession_score <= 3)
+
+plot_missing(plays)
 set.seed(222)
+plays_small <- plays %>% sample_n(15000)
 # Put 3/4 of the data into the training set 
-data_split <- initial_split(plays2, prop = 3/4)
+data_split <- initial_split(plays_small, prop = 3/4)
 
 # Create data frames for the two sets:
 train_data <- training(data_split)
 test_data  <- testing(data_split)
 
 
-plays_rec <- recipe(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = train_data)
+plays_rec <- recipe(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = train_data) %>%
+    step_dummy(team_basket)
 
-cores <- parallel::detectCores()
+cores <- parallel::detectCores() - 1
 
-rf_mod <- rand_forest(trees = 1000) %>%
-    set_engine("ranger", num.threads = cores) %>%
-    set_mode("regression")
+tune_spec <- rand_forest(mtry = tune(),
+                         trees = 1000,
+                         min_n = tune()) %>%
+    set_mode("regression") %>%
+    set_engine("ranger", num.threads = cores)
 
-plays_wflow <- workflow() %>% 
-    add_model(rf_mod) %>% 
-    add_recipe(plays_rec)
+plays_wflow <- workflow() %>%
+    add_recipe(plays_rec) %>%
+    add_model(tune_spec)
 
-plays_fit <- plays_wflow %>% 
-    fit(data = train_data)
+folds <- vfold_cv(train_data, v = 5)
 
-folds <- vfold_cv(train_data, v = 10)
-folds
+plays_tune <- plays_wflow %>% 
+    tune_grid(resamples = folds,
+         grid = 25) 
+
+plays_tune %>% collect_metrics(metric = "rmse")
+
+plays_tune %>% select_best(metric = "rmse")
+
+data_split <- initial_split(plays, prop = 3/4)
+
+# Create data frames for the two sets:
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+plays_model <- rand_forest(mtry = 2,
+                           trees = 1000,
+                           min_n = 30) %>%
+    set_mode("regression") %>%
+    set_engine("ranger", num.threads = cores)
+
+plays_wflow <- workflow() %>%
+    add_recipe(plays_rec) %>%
+    add_model(plays_model)
 
 plays_fit_rs <- plays_wflow %>% 
     fit_resamples(folds)
 
 collect_metrics(plays_fit_rs)
 
-plays_testing_pred <- predict(plays_fit, plays2) %>% 
-    bind_cols(plays2 %>% select(possession_score))
+plays_fit <- plays_wflow %>%
+    fit(train_data)
+
+plays_testing_pred <- predict(plays_fit, test_data) %>% 
+    bind_cols(test_data %>% select(possession_score))
+
+plays_testing_pred %>% 
+    rmse(possession_score, .pred)
+
+plays_fit_all <- plays_wflow %>%
+    fit(plays)
+
+plays_testing_pred <- predict(plays_fit_all, plays) %>% 
+    bind_cols(plays %>% select(possession_score))
 
 plays_testing_pred %>% 
     rmse(possession_score, .pred)
 
 plays2 <- plays %>% 
-    dplyr::select(-X, -game_number, -possession_ids, -half) %>%
+    #dplyr::select(-X, -game_number, -possession_ids, -half) %>%
     mutate(team_basket = factor(team_basket)) %>%
     filter(!is.na(possession_x_location)) %>%
     filter(!is.na(season)) %>%
@@ -72,19 +113,6 @@ plays2 <- plays %>%
 
 plot_missing(plays2)
 
-lm_model <- lm(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = plays)
-library(ranger)
-rf <- ranger(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = plays)
-
-obs <- sample(1:nrow(plays2), nrow(plays2) *.3, replace = FALSE)
-train <- plays2[-obs,]
-test <- plays2[obs, ]
-lm_train <-  lm(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = train)
-model <- ranger(possession_score ~ possession_x_location + possession_y_location + score_diff + time + team_basket, data = train)
-rf_preds <- predict(model, test)
-lm_preds <- predict(lm_train, test)
-rmse <- (rf_preds$predictions - test$possession_score)^2 %>% sqrt() %>% mean()
-rmse2 <- (lm_preds - test$possession_score)^2 %>% sqrt() %>% mean()
 attempt <- plays2 %>% 
     mutate(pred = plays_testing_pred$.pred) %>% 
     group_by(timeouts_possessions) %>%
